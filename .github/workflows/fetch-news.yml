@@ -1,0 +1,40 @@
+# Refreshes assets/news.json from the feeds in scripts/news-sources.json.
+# Runs every 4 hours and can be started by hand from the Actions tab.
+# Scheduled runs only fire on the repository's default branch.
+name: Fetch news
+
+on:
+  schedule:
+    - cron: "17 */4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fetch-news
+  cancel-in-progress: false
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Fetch feeds and rebuild news.json
+        run: node scripts/fetch-news.mjs
+      - name: Commit if anything changed
+        run: |
+          # Ignore the "updated" timestamp so a run with no new stories makes no commit.
+          if git diff --quiet -I '"updated"' -- assets/news.json; then
+            echo "No new stories."
+            exit 0
+          fi
+          git config user.name "news-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/news.json
+          git commit -m "Refresh news"
+          git push

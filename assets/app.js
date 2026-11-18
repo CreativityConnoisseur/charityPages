@@ -1,5 +1,6 @@
-// Renders the site from window.IDEAS using hash routes:
-//   #/                 home
+// Renders the site from window.IDEAS and assets/news.json using hash routes:
+//   #/                 good news from Muslim communities (home)
+//   #/programs         programs hub: search and browse by need
 //   #/ideas[/<cat>]    all ideas with search, category filter and sort
 //   #/idea/<id>        one idea
 //   #/start            how to start any program
@@ -115,14 +116,134 @@
     );
   }
 
-  function setTitle(t) { document.title = t ? t + " · Masjid Community Ideas" : "Masjid Community Ideas"; }
+  function setTitle(t) { document.title = t ? t + " · Masjid Good News" : "Masjid Good News"; }
 
-  // ---- Home ----
+  // ---- News (home) ----
+  // Stories come from assets/news.json, rebuilt every few hours by
+  // .github/workflows/fetch-news.yml. We show the headline, a short excerpt and
+  // the outlet, and send readers to the publisher for the full story.
+
+  var REGIONS = { all: "Everywhere", us: "United States", canada: "Canada", uk: "United Kingdom", global: "Worldwide" };
+  var TOPIC_LABELS = { community: "Community", charity: "Charity and giving", youth: "Youth and education", interfaith: "Interfaith", seasons: "Ramadan and Eid", learning: "Faith and learning" };
+  var newsData = null;
+  var newsState = { region: "all", topic: "all" };
+
+  function loadNews() {
+    if (newsData) return Promise.resolve(newsData);
+    return fetch("assets/news.json", { cache: "no-cache" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { newsData = d; return d; });
+  }
+
+  function ago(iso) {
+    var mins = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (mins < 60) return mins <= 1 ? "just now" : mins + " minutes ago";
+    var hrs = Math.round(mins / 60);
+    if (hrs < 24) return hrs === 1 ? "1 hour ago" : hrs + " hours ago";
+    var days = Math.round(hrs / 24);
+    if (days < 7) return days === 1 ? "yesterday" : days + " days ago";
+    return fmtDate(iso);
+  }
+
+  function safeUrl(u) { return /^https?:\/\//i.test(u) ? u : "#"; }
+
+  function storyCard(it) {
+    var topics = (it.topics || []).filter(function (t) { return TOPIC_LABELS[t]; }).slice(0, 2).map(function (t) {
+      return '<span class="story-topic">' + esc(TOPIC_LABELS[t]) + "</span>";
+    }).join("");
+    return (
+      '<li class="story"><article>' +
+      '<p class="story-meta"><a href="' + esc(safeUrl(it.sourceUrl)) + '" target="_blank" rel="noopener">' + esc(it.source) + "</a>" +
+      '<span aria-hidden="true">·</span><time datetime="' + esc(it.date) + '">' + esc(ago(it.date)) + "</time>" +
+      (REGIONS[it.region] && it.region !== "global" ? '<span aria-hidden="true">·</span><span>' + esc(REGIONS[it.region]) + "</span>" : "") + "</p>" +
+      '<h2 class="story-title"><a href="' + esc(safeUrl(it.link)) + '" target="_blank" rel="noopener">' + esc(it.title) + "</a></h2>" +
+      (it.excerpt ? '<p class="story-excerpt">' + esc(it.excerpt) + "</p>" : "") +
+      '<p class="story-foot">' + topics + '<a class="story-read" href="' + esc(safeUrl(it.link)) + '" target="_blank" rel="noopener">Read at ' + esc(it.source) + " " + icon("arrow", "icon icon-sm") + '<span class="sr"> (opens in a new tab)</span></a></p>' +
+      "</article></li>"
+    );
+  }
+
+  function renderNewsResults() {
+    var list = newsData.items.filter(function (it) {
+      return (newsState.region === "all" || it.region === newsState.region) &&
+        (newsState.topic === "all" || (it.topics || []).indexOf(newsState.topic) > -1);
+    });
+    document.getElementById("news-count").textContent = list.length === 1 ? "1 story" : list.length + " stories";
+    document.getElementById("news-list").innerHTML = list.length
+      ? list.map(storyCard).join("")
+      : '<li class="empty">No stories match yet. Try another region or topic.</li>';
+  }
+
+  function chipRow(name, labels, current) {
+    return Object.keys(labels).map(function (k) {
+      return '<button type="button" class="chip" data-' + name + '="' + k + '" aria-pressed="' + (k === current) + '">' + esc(labels[k]) + "</button>";
+    }).join("");
+  }
+
+  function renderNews() {
+    setTitle("");
+    main.innerHTML =
+      '<section class="page-head news-head"><div class="wrap">' +
+      '<p class="eyebrow">Good news</p>' +
+      "<h1>Good news from Muslim communities</h1>" +
+      '<p class="lede">New mosques, community projects, charity and learning, gathered every few hours from trusted Muslim outlets. Each story links to its publisher.</p>' +
+      "</div></section>" +
+      '<div class="wrap news-layout"><div class="news-main" id="news-body"><p class="empty">Loading stories…</p></div>' +
+      '<aside class="news-side" aria-label="Tools for your masjid">' +
+      '<h2>Tools for your masjid</h2>' +
+      '<p>Turn good news into your own: ' + ranked.length + ' free program ideas, each with a step-by-step plan.</p>' +
+      '<ul class="side-links">' +
+      '<li><a href="#/programs">Browse program ideas ' + icon("arrow", "icon icon-sm") + "</a></li>" +
+      '<li><a href="#/start">How to start a program ' + icon("arrow", "icon icon-sm") + "</a></li>" +
+      '<li><a href="#/my">Track your programs ' + icon("arrow", "icon icon-sm") + "</a></li>" +
+      "</ul></aside></div>";
+
+    loadNews().then(function (d) {
+      var body = document.getElementById("news-body");
+      if (!body) return;
+      var regions = {};
+      d.items.forEach(function (it) { regions[it.region] = true; });
+      var regionLabels = {};
+      Object.keys(REGIONS).forEach(function (k) { if (k === "all" || regions[k]) regionLabels[k] = REGIONS[k]; });
+      var topicLabels = { all: "All topics" };
+      Object.keys(TOPIC_LABELS).forEach(function (k) {
+        if (d.items.some(function (it) { return (it.topics || []).indexOf(k) > -1; })) topicLabels[k] = TOPIC_LABELS[k];
+      });
+      if (!regionLabels[newsState.region]) newsState.region = "all";
+      if (!topicLabels[newsState.topic]) newsState.topic = "all";
+
+      body.innerHTML =
+        '<section class="controls" aria-label="Filter stories">' +
+        '<div class="chips" role="group" aria-label="Region">' + chipRow("region", regionLabels, newsState.region) + "</div>" +
+        '<div class="chips chips-quiet" role="group" aria-label="Topic">' + chipRow("topic", topicLabels, newsState.topic) + "</div>" +
+        '<div class="sort-row"><span id="news-count" class="count" aria-live="polite"></span>' +
+        '<span class="count">Updated ' + esc(ago(d.updated)) + "</span></div></section>" +
+        '<ol id="news-list" class="stories"></ol>' +
+        '<p class="news-note">Stories are picked automatically for a hopeful, community-minded tone, so a few may miss the mark. The full articles belong to their publishers.</p>';
+
+      body.querySelector(".controls").addEventListener("click", function (e) {
+        var btn = e.target.closest(".chip");
+        if (!btn) return;
+        if (btn.dataset.region) newsState.region = btn.dataset.region;
+        if (btn.dataset.topic) newsState.topic = btn.dataset.topic;
+        body.querySelectorAll(".chip").forEach(function (b) {
+          b.setAttribute("aria-pressed", String(b.dataset.region ? b.dataset.region === newsState.region : b.dataset.topic === newsState.topic));
+        });
+        renderNewsResults();
+      });
+      renderNewsResults();
+    }).catch(function () {
+      var body = document.getElementById("news-body");
+      if (body) body.innerHTML = '<div class="empty-state"><h2>News is taking a break</h2><p>We couldn\u2019t load today\u2019s stories. Please try again in a few minutes.</p><a class="btn btn-primary" href="#/programs">Browse program ideas</a></div>';
+    });
+  }
+
+  // ---- Programs hub ----
   // Deliberately minimal: one message, one search box, one way in per category.
   // Detail lives on the Ideas page and each program's own page.
 
   function renderHome() {
-    setTitle("");
+    setTitle("Programs");
     var cats = Object.keys(CATS).map(function (key) {
       return '<li><a class="home-cat cat-' + key + '" href="#/ideas/' + key + '">' + icon(key, "icon icon-sm") + esc(CATS[key]) + "</a></li>";
     }).join("");
@@ -865,7 +986,7 @@
         ? '<div class="stats">' + tiles + "</div>" + programs +
           (newsletter ? '<section class="report-summary"><h3>In a sentence</h3><p id="rp-text">' + esc(newsletter) + "</p></section>" : "")
         : '<div class="empty-state small"><h2>Nothing logged for ' + esc(periodLabel(period)) + "</h2><p>Log sessions on each program's dashboard and they'll show up here. Try another period above.</p></div>") +
-      '<footer class="report-foot">Prepared ' + esc(fmtDate(new Date().toISOString())) + " with Masjid Community Ideas. Figures are entered by program volunteers.</footer>" +
+      '<footer class="report-foot">Prepared ' + esc(fmtDate(new Date().toISOString())) + " with Masjid Good News. Figures are entered by program volunteers.</footer>" +
       "</article></div>";
 
     document.getElementById("rp-period").addEventListener("change", function (e) { location.hash = "#/report/" + e.target.value; });
@@ -1092,15 +1213,17 @@
     currentDash = null;
     if (page === "idea" && byId[parts[1]]) renderIdea(byId[parts[1]]);
     else if (page === "ideas") renderList(parts[1]);
+    else if (page === "programs") renderHome();
     else if (page === "start") renderStart();
     else if (page === "about") renderAbout();
     else if (page === "my" && byId[parts[1]] && getProgram(parts[1])) renderProgramDash(byId[parts[1]]);
     else if (page === "my") renderMy();
     else if (page === "report") renderReport(parts[1]);
-    else { page = "home"; renderHome(); }
+    else { page = "news"; renderNews(); }
 
     document.querySelectorAll("[data-nav]").forEach(function (a) {
-      var active = a.dataset.nav === page || (page === "idea" && a.dataset.nav === "ideas") || (page === "report" && a.dataset.nav === "my");
+      var inPrograms = page === "programs" || page === "ideas" || page === "idea";
+      var active = a.dataset.nav === page || (inPrograms && a.dataset.nav === "programs") || (page === "report" && a.dataset.nav === "my");
       if (active) a.setAttribute("aria-current", "page");
       else a.removeAttribute("aria-current");
     });

@@ -1,0 +1,12 @@
+{
+  "_note": "Feeds read by scripts/fetch-news.mjs. 'focus' = muslim means every story is about Muslims, so only the tone filter applies. 'focus' = general means a story must also mention Muslims, mosques or Islam.",
+  "sources": [
+    { "name": "MuslimMatters", "site": "https://muslimmatters.org", "feed": "https://muslimmatters.org/feed/", "region": "us", "focus": "muslim" },
+    { "name": "About Islam", "site": "https://aboutislam.net", "feed": "https://aboutislam.net/feed/", "region": "global", "focus": "muslim" },
+    { "name": "Canadian Muslim Journal", "site": "https://www.iqra.ca", "feed": "https://www.iqra.ca/feed/", "region": "canada", "focus": "muslim" },
+    { "name": "5Pillars", "site": "https://5pillarsuk.com", "feed": "https://5pillarsuk.com/feed/", "region": "uk", "focus": "muslim" },
+    { "name": "The Arab American News", "site": "https://www.arabamericannews.com", "feed": "https://www.arabamericannews.com/feed/", "region": "us", "focus": "general" },
+    { "name": "Good News Network", "site": "https://www.goodnewsnetwork.org", "feed": "https://www.goodnewsnetwork.org/tag/muslim/feed/", "region": "global", "focus": "muslim" },
+    { "name": "The Muslim Vibe", "site": "https://www.themuslimvibe.com", "feed": "https://www.themuslimvibe.com/feed", "region": "uk", "focus": "muslim" }
+  ]
+}
